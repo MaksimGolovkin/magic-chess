@@ -1,0 +1,532 @@
+<title>Каменные армии</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+SC:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<style>
+/* Layout: a torch-lit stone hall. One big 3D stage, two columns of piece notes below. Deliberately single dark theme. */
+:root{
+  --bg:#141210;
+  --panel:#1d1a17;
+  --line:#3a342d;
+  --fg:#e9e2d4;
+  --muted:#a69c8c;
+  --elf:#8fd3ff;
+  --orc:#ff6a3d;
+  --display:"Cormorant SC","Cormorant",Georgia,serif;
+  --body:"Alegreya Sans","Segoe UI",system-ui,sans-serif;
+  color-scheme:dark;
+}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--body);font-size:16px;line-height:1.5;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 24px}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(30px,5vw,48px);line-height:1;margin:0;letter-spacing:.02em;text-wrap:balance}
+h1 .vs{color:var(--muted);font-weight:500;font-size:.6em;padding:0 .3em}
+.sub{color:var(--muted);margin:0;max-width:60ch}
+.stage{position:relative;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#0d0c0b;height:min(68vh,640px);min-height:380px;touch-action:none}
+.stage canvas{display:block;width:100%;height:100%;cursor:grab}
+.stage canvas:active{cursor:grabbing}
+#labels{position:absolute;inset:0;pointer-events:none}
+.lbl{position:absolute;transform:translate(-50%,0);white-space:nowrap;font-size:12px;letter-spacing:.04em;padding:1px 7px;border-radius:3px;background:rgba(13,12,11,.72);color:var(--fg)}
+.lbl.L{border-bottom:1px solid var(--elf)}
+.lbl.D{border-bottom:1px solid var(--orc)}
+.controls{position:absolute;left:12px;right:12px;top:12px;display:flex;flex-wrap:wrap;gap:8px}
+button{font:500 14px/1 var(--body);color:var(--fg);background:rgba(29,26,23,.88);border:1px solid var(--line);padding:10px 14px;border-radius:4px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--elf);outline-offset:2px}
+button.L{border-color:color-mix(in srgb,var(--elf) 55%,var(--line))}
+button.D{border-color:color-mix(in srgb,var(--orc) 55%,var(--line))}
+button:disabled{opacity:.45;cursor:default}
+.hint{position:absolute;bottom:8px;right:12px;font-size:12px;color:var(--muted)}
+.armies{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px}
+.army{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px 20px;min-width:0}
+.army h2{font-family:var(--display);font-size:26px;margin:0 0 4px;letter-spacing:.03em}
+.army.L h2{color:var(--elf)} .army.D h2{color:var(--orc)}
+.army p.lead{margin:0 0 12px;color:var(--muted)}
+dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:8px 14px}
+dt{font-family:var(--display);font-weight:700;font-size:17px;white-space:nowrap}
+dd{margin:0;color:var(--fg)}
+.note{color:var(--muted);font-size:14px;max-width:75ch;margin:0}
+@media (max-width:520px){.lbl{font-size:10px;padding:0 4px}.hint{display:none}button{padding:9px 10px;font-size:13px}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Люди и эльфы <span class="vs">против</span> орков</h1>
+    <p class="sub">Черновые 3D-эскизы всех шести фигур каждой армии. Обе армии вырезаны из камня: светлая из мрамора с голубыми рунами, тёмная из базальта с тлеющими углями.</p>
+  </header>
+
+  <div class="stage" id="stage">
+    <canvas id="c" aria-label="3D-сцена с фигурами двух армий"></canvas>
+    <div id="labels"></div>
+    <div class="hint">Тяните, чтобы повернуть · колесо для приближения</div>
+    <div class="controls">
+      <button id="capL" class="L">Взятие: конь бьёт орка</button>
+      <button id="capD" class="D">Взятие: варг бьёт эльфа</button>
+      <button id="spin" aria-pressed="true">Вращение фигур: вкл</button>
+      <button id="reset">Сбросить вид</button>
+    </div>
+  </div>
+
+  <div class="armies">
+    <section class="army L">
+      <h2>Светлая армия</h2>
+      <p class="lead">Белый мрамор, стройные силуэты, голубое свечение рун.</p>
+      <dl>
+        <dt>Пешка</dt><dd>Эльф-копейщик с листовидным щитом и длинным копьём.</dd>
+        <dt>Ладья</dt><dd>Белая сторожевая башня с зубцами, бойницами и знаменем.</dd>
+        <dt>Конь</dt><dd>Боевой конь в налобной броне, глаза светятся.</dd>
+        <dt>Слон</dt><dd>Эльфийский маг в капюшоне, посох с кристаллом.</dd>
+        <dt>Ферзь</dt><dd>Королева эльфов в высокой тонкой короне.</dd>
+        <dt>Король</dt><dd>Король людей в плаще, с бородой и мечом, опущенным остриём вниз.</dd>
+      </dl>
+    </section>
+    <section class="army D">
+      <h2>Тёмная армия</h2>
+      <p class="lead">Чёрный базальт, грубые тяжёлые формы, шипы и красные глаза.</p>
+      <dl>
+        <dt>Пешка</dt><dd>Орк-рубака: сутулый, с клыками и топором.</dd>
+        <dt>Ладья</dt><dd>Шипастая крепость с черепом над входом.</dd>
+        <dt>Конь</dt><dd>Варг: волчья голова с открытой пастью и шерстью-шипами.</dd>
+        <dt>Слон</dt><dd>Шаман в рогатой маске-черепе, с костяными бусами и посохом.</dd>
+        <dt>Ферзь</dt><dd>Колдунья с шипастыми наплечниками и посохом-серпом.</dd>
+        <dt>Король</dt><dd>Вождь орков в рогатом шлеме, с огромным тесаком.</dd>
+      </dl>
+    </section>
+  </div>
+  <p class="note">Это эскизы из простых форм, чтобы утвердить силуэты, пропорции и характер. В игре модели станут детальнее, а анимация взятия получит звук, больше осколков и магию.</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+const PI=Math.PI;
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const stage=document.getElementById('stage');
+const canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.05;
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x0d0c0b);
+scene.fog=new THREE.Fog(0x0d0c0b,16,30);
+const camera=new THREE.PerspectiveCamera(34,1,.1,100);
+
+/* ---------- lights ---------- */
+scene.add(new THREE.HemisphereLight(0xcfd8e6,0x2a2019,.55));
+const sun=new THREE.DirectionalLight(0xfff1dd,1.5);
+sun.position.set(4,9,6);sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-7,right:7,top:7,bottom:-7,near:1,far:25});
+sun.shadow.bias=-.0005;
+scene.add(sun);
+const rimL=new THREE.PointLight(0x7fc4ff,.9,12);rimL.position.set(-5,3,4);scene.add(rimL);
+const rimD=new THREE.PointLight(0xff5a2a,1.1,12);rimD.position.set(5,2.5,-4.5);scene.add(rimD);
+
+/* ---------- stone textures ---------- */
+function stoneTex(base,vein,speck,veins){
+  const c=document.createElement('canvas');c.width=c.height=256;
+  const g=c.getContext('2d');g.fillStyle=base;g.fillRect(0,0,256,256);
+  const img=g.getImageData(0,0,256,256),d=img.data;
+  for(let i=0;i<d.length;i+=4){const n=(Math.random()-.5)*speck;d[i]+=n;d[i+1]+=n;d[i+2]+=n;}
+  g.putImageData(img,0,0);
+  g.strokeStyle=vein;
+  for(let k=0;k<veins;k++){g.globalAlpha=.15+Math.random()*.25;g.lineWidth=.4+Math.random()*1.4;g.beginPath();let x=Math.random()*256,y=-10;g.moveTo(x,y);while(y<266){x+=(Math.random()-.5)*28;y+=10;g.lineTo(x,y);}g.stroke();}
+  const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.encoding=THREE.sRGBEncoding;return t;
+}
+const marble=stoneTex('#e6dfd2','#8f8778',22,9);
+const basalt=stoneTex('#3b3632','#7a3b22',30,5);
+const slateL=stoneTex('#a99f90','#6f675b',18,6);
+const slateD=stoneTex('#2a2522','#4a4038',20,4);
+const std=(map,color,rough,extra)=>new THREE.MeshStandardMaterial(Object.assign({map,bumpMap:map,bumpScale:.015,color,roughness:rough,metalness:0},extra||{}));
+const MAT={
+  L:{stone:std(marble,0xffffff,.62),trim:std(marble,0xc9bfae,.7),dark:std(basalt,0x6c6660,.9),glow:new THREE.MeshStandardMaterial({color:0x9fdcff,emissive:0x5cc0ff,emissiveIntensity:1.6,roughness:.3})},
+  D:{stone:std(basalt,0xffffff,.88),trim:std(marble,0x9b8f7c,.85),dark:std(basalt,0x7a6a5e,.9),glow:new THREE.MeshStandardMaterial({color:0xff6a3d,emissive:0xff3a0c,emissiveIntensity:1.8,roughness:.4})}
+};
+MAT.L.base=MAT.L.trim;MAT.D.base=std(basalt,0x8a7d72,.92);
+MAT.L.cape=MAT.L.stone.clone();MAT.L.cape.side=THREE.DoubleSide;
+MAT.D.cape=MAT.D.stone.clone();MAT.D.cape.side=THREE.DoubleSide;
+
+/* ---------- geometry helpers ---------- */
+const V2=(r,y)=>new THREE.Vector2(r,y);
+const lathe=(pts,seg=32)=>new THREE.LatheGeometry(pts.map(p=>V2(p[0],p[1])),seg);
+const G={
+  sph:(r,ws=20,hs=14)=>new THREE.SphereGeometry(r,ws,hs),
+  box:(w,h,d)=>new THREE.BoxGeometry(w,h,d),
+  cyl:(rt,rb,h,s=16,open=false,ts=0,tl=PI*2)=>new THREE.CylinderGeometry(rt,rb,h,s,1,open,ts,tl),
+  cone:(r,h,s=12)=>new THREE.ConeGeometry(r,h,s),
+  tor:(r,t,arc=PI*2)=>new THREE.TorusGeometry(r,t,8,32,arc),
+  oct:r=>new THREE.OctahedronGeometry(r,0)
+};
+function M(parent,geo,mat,p,r,s){
+  const m=new THREE.Mesh(geo,mat);
+  if(p)m.position.set(p[0],p[1],p[2]);
+  if(r)m.rotation.set(r[0],r[1],r[2]);
+  if(s)m.scale.set(s[0],s[1],s[2]);
+  m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;
+}
+function Gr(parent,p,r){const g=new THREE.Group();if(p)g.position.set(p[0],p[1],p[2]);if(r)g.rotation.set(r[0],r[1],r[2]);parent.add(g);return g;}
+/* place n copies around the Y axis; tilt leans each one outward */
+function ring(parent,n,radius,y,make,tilt=0,offset=0){
+  for(let i=0;i<n;i++){const a=offset+i/n*PI*2;const pv=Gr(parent,[Math.sin(a)*radius,y,Math.cos(a)*radius],[0,a,0]);const inner=Gr(pv,null,[tilt,0,0]);make(inner,i);}
+}
+const mirror=(f)=>{f(1);f(-1);};
+
+function base(g,m){M(g,lathe([[0,0],[.42,0],[.44,.03],[.43,.07],[.37,.1],[.34,.15],[.36,.18],[.31,.22],[0,.22]]),m.base);}
+
+/* ---------- LIGHT ARMY ---------- */
+const L={
+pawn(g,m){
+  M(g,lathe([[0,.22],[.22,.22],[.19,.36],[.15,.56],[.12,.68],[0,.7]]),m.stone);
+  M(g,G.tor(.163,.018),m.trim,[0,.5,0],[PI/2,0,0]);
+  M(g,G.sph(1),m.stone,[0,.69,0],null,[.16,.07,.12]);
+  M(g,G.cyl(.04,.045,.08),m.stone,[0,.74,0]);
+  M(g,G.sph(.085),m.stone,[0,.82,.01]);
+  M(g,G.sph(1),m.stone,[0,.77,-.055],null,[.085,.14,.06]);
+  mirror(s=>M(g,G.cone(.022,.11),m.stone,[s*.085,.85,-.01],[0,0,-s*1.2]));
+  M(g,G.cyl(.013,.013,1.05,8),m.trim,[.2,.68,.04]);
+  M(g,G.cone(.032,.14,8),m.trim,[.2,1.27,.04]);
+  M(g,G.sph(.035),m.stone,[.2,.6,.06]);
+  const sh=M(g,G.cyl(.13,.13,.028,24),m.trim,[-.2,.52,.04],[0,0,PI/2],[1.4,1,1]);
+  M(g,G.oct(.03),m.glow,[-.218,.52,.04]);
+},
+rook(g,m){
+  M(g,lathe([[0,.22],[.3,.22],[.28,.27],[.25,.32],[.24,.9],[.3,.94],[.3,1.04],[0,1.04]]),m.stone);
+  ring(g,8,.255,1.09,p=>M(p,G.box(.11,.11,.07),m.stone));
+  [.55,.78].forEach(y=>M(g,G.tor(.243,.012),m.trim,[0,y,0],[PI/2,0,0]));
+  ring(g,3,.24,.66,p=>M(p,G.box(.03,.13,.02),m.glow),0,-1.15);
+  M(g,G.box(.13,.2,.03),m.dark,[0,.33,.255]);
+  M(g,G.cyl(.01,.01,.42,6),m.trim,[0,1.24,0]);
+  M(g,G.box(.18,.1,.01),m.trim,[.095,1.38,0]);
+},
+knight(g,m){
+  const k=Gr(g,null,[0,-.55,0]);
+  M(k,lathe([[0,.22],[.24,.22],[.2,.3],[.17,.36],[0,.37]]),m.stone);
+  const neck=Gr(k,[0,.36,-.03],[.25,0,0]);
+  M(neck,G.box(.17,.56,.25),m.stone,[0,.27,0]);
+  M(neck,G.sph(1),m.stone,[0,.1,.07],null,[.13,.16,.15]);
+  for(let i=0;i<6;i++)M(neck,G.box(.045,.1,.08),m.trim,[0,.06+i*.09,-.14],[-.3,0,0]);
+  const head=Gr(k,[0,.9,.1],[.55,0,0]);
+  M(head,G.box(.15,.17,.42),m.stone,[0,0,.13]);
+  M(head,G.box(.135,.14,.13),m.stone,[0,-.02,.36]);
+  M(head,G.box(.06,.02,.28),m.trim,[0,.095,.14]);
+  mirror(s=>{M(head,G.cone(.03,.12),m.stone,[s*.045,.13,-.03],[-.3,0,-s*.15]);M(head,G.sph(.02),m.glow,[s*.078,.04,.05]);});
+},
+bishop(g,m){
+  M(g,lathe([[0,.22],[.25,.22],[.21,.36],[.16,.62],[.12,.86],[.1,.94],[0,.96]]),m.stone);
+  M(g,G.sph(1),m.stone,[0,.92,0],null,[.15,.07,.11]);
+  M(g,G.sph(1),m.stone,[0,.99,-.01],null,[.13,.08,.13]);
+  M(g,G.cone(.13,.34,24),m.stone,[0,1.13,-.02]);
+  M(g,G.sph(.075),m.dark,[0,1.02,.065]);
+  mirror(s=>M(g,G.sph(.012),m.glow,[s*.025,1.03,.13]));
+  M(g,G.cyl(.05,.075,.26),m.stone,[-.15,.78,.07],[0,0,-.6]);
+  M(g,G.sph(.035),m.stone,[-.21,.72,.08]);
+  M(g,G.cyl(.013,.016,1.38,8),m.trim,[-.21,.86,.07]);
+  M(g,G.oct(.065),m.glow,[-.21,1.62,.07]);
+  ring(Gr(g,[-.21,1.55,.07]),3,.04,0,p=>M(p,G.cone(.012,.1,6),m.trim,[0,.04,0]),.5);
+},
+queen(g,m){
+  M(g,lathe([[0,.22],[.28,.22],[.25,.3],[.17,.55],[.11,.85],[.085,1],[.11,1.08],[.07,1.13],[0,1.14]]),m.stone);
+  M(g,G.tor(.11,.014),m.trim,[0,.85,0],[PI/2,0,0]);
+  M(g,G.sph(1),m.stone,[0,1.1,0],null,[.13,.05,.09]);
+  M(g,G.cyl(.03,.035,.08),m.stone,[0,1.17,0]);
+  M(g,G.sph(.08),m.stone,[0,1.25,.01]);
+  M(g,G.sph(1),m.stone,[0,1.13,-.055],null,[.09,.2,.06]);
+  mirror(s=>{M(g,G.cone(.018,.085),m.stone,[s*.078,1.27,0],[0,0,-s*1.2]);M(g,G.cyl(.03,.04,.32),m.stone,[s*.13,.98,.05],[.5,0,s*.35]);});
+  M(g,G.tor(.064,.01),m.trim,[0,1.31,0],[PI/2,0,0]);
+  ring(g,7,.062,1.37,p=>M(p,G.cone(.012,.12,6),m.trim),.18);
+  M(g,G.oct(.022),m.glow,[0,1.32,.07]);
+  M(g,G.sph(.045),m.glow,[0,.9,.16]);
+},
+king(g,m){
+  M(g,lathe([[0,.22],[.3,.22],[.27,.3],[.22,.5],[.18,.95],[.15,1.12],[0,1.14]]),m.stone);
+  M(g,G.cyl(.2,.31,.88,28,true,PI/2,PI),m.cape,[0,.7,-.01]);
+  M(g,G.sph(1),m.stone,[0,1.12,0],null,[.22,.09,.16]);
+  M(g,G.tor(.15,.045),m.trim,[0,1.13,0],[PI/2,0,0]);
+  M(g,G.sph(.095),m.stone,[0,1.27,.01]);
+  M(g,G.cone(.07,.15),m.stone,[0,1.18,.06],[PI,0,0]);
+  M(g,G.cyl(.085,.08,.07,18,true),m.cape,[0,1.36,0]);
+  ring(g,5,.082,1.42,p=>M(p,G.cone(.018,.07,6),m.trim),.1);
+  M(g,G.box(.022,.13,.022),m.trim,[0,1.48,0]);
+  M(g,G.box(.075,.022,.022),m.trim,[0,1.5,0]);
+  M(g,G.oct(.022),m.glow,[0,1.37,.085]);
+  M(g,G.box(.045,.56,.014),m.trim,[0,.53,.27]);
+  M(g,G.box(.21,.03,.035),m.trim,[0,.82,.27]);
+  M(g,G.cyl(.015,.015,.12,8),m.trim,[0,.89,.27]);
+  M(g,G.sph(.026),m.trim,[0,.96,.27]);
+  M(g,G.oct(.018),m.glow,[0,.82,.29]);
+  mirror(s=>{M(g,G.cyl(.04,.05,.36),m.stone,[s*.12,1.0,.15],[.75,0,s*.35]);M(g,G.sph(.04),m.stone,[s*.035,.9,.27]);});
+}
+};
+
+/* ---------- DARK ARMY ---------- */
+const D={
+pawn(g,m){
+  M(g,lathe([[0,.22],[.26,.22],[.25,.36],[.22,.52],[.15,.6],[0,.62]]),m.stone);
+  M(g,G.tor(.238,.025),m.trim,[0,.4,0],[PI/2,0,0]);
+  M(g,G.sph(1),m.stone,[0,.58,.02],null,[.23,.1,.16]);
+  mirror(s=>M(g,G.cone(.03,.11,8),m.trim,[s*.19,.66,0],[0,0,-s*.5]));
+  M(g,G.sph(1),m.stone,[0,.68,.08],null,[.125,.1,.115]);
+  M(g,G.box(.17,.07,.1),m.stone,[0,.63,.13]);
+  M(g,G.box(.19,.035,.06),m.stone,[0,.72,.15]);
+  mirror(s=>{M(g,G.sph(.018),m.glow,[s*.045,.69,.185]);M(g,G.cone(.016,.07,6),m.trim,[s*.055,.68,.18]);});
+  const axe=Gr(g,[.29,.45,.06],[0,0,-.15]);
+  M(axe,G.cyl(.017,.017,.72,8),m.trim);
+  M(axe,G.box(.02,.2,.16),m.dark,[0,.26,.08]);
+  M(axe,G.cone(.02,.08,6),m.trim,[0,.4,0]);
+  M(g,G.sph(.04),m.stone,[.27,.42,.07]);
+},
+rook(g,m){
+  M(g,lathe([[0,.22],[.34,.22],[.31,.32],[.27,.5],[.22,.92],[.3,.96],[.27,1.04],[0,1.04]]),m.stone);
+  ring(g,7,.23,1.1,p=>M(p,G.cone(.045,.22,8),m.dark),.35);
+  ring(g,6,.25,.62,p=>M(p,G.cone(.03,.16,8),m.dark,[0,0,.07],[PI/2,0,0]),0,PI/6);
+  ring(g,4,.235,.82,p=>M(p,G.box(.025,.12,.02),m.glow),0,PI/4);
+  M(g,G.sph(.07),m.trim,[0,.8,.235]);
+  M(g,G.box(.07,.04,.05),m.trim,[0,.745,.25]);
+  mirror(s=>M(g,G.sph(.016),m.glow,[s*.026,.81,.295]));
+  M(g,G.box(.14,.2,.03),m.glow,[0,.33,.3]);
+},
+knight(g,m){
+  const k=Gr(g,null,[0,.55,0]);
+  M(k,lathe([[0,.22],[.25,.22],[.21,.3],[.18,.36],[0,.37]]),m.stone);
+  const neck=Gr(k,[0,.36,-.03],[.22,0,0]);
+  M(neck,G.box(.21,.52,.28),m.stone,[0,.25,0]);
+  M(neck,G.sph(1),m.stone,[0,.12,.08],null,[.15,.17,.16]);
+  for(let i=0;i<6;i++)M(neck,G.cone(.035,.14,6),m.dark,[0,.06+i*.085,-.15],[-2.1,0,0]);
+  const head=Gr(k,[0,.87,.1],[.3,0,0]);
+  M(head,G.box(.19,.17,.22),m.stone,[0,0,.02]);
+  M(head,G.box(.11,.09,.27),m.stone,[0,-.02,.23]);
+  M(head,G.box(.1,.035,.22),m.stone,[0,-.1,.19],[.32,0,0]);
+  mirror(s=>{
+    M(head,G.cone(.04,.17,8),m.stone,[s*.065,.14,-.04],[-.4,0,-s*.22]);
+    M(head,G.sph(.021),m.glow,[s*.085,.03,.08]);
+    M(head,G.cone(.012,.055,6),m.trim,[s*.035,-.085,.33],[PI,0,0]);
+  });
+  M(head,G.box(.09,.04,.15),m.glow,[0,-.065,.2],null,[.8,.4,1]);
+},
+bishop(g,m){
+  M(g,lathe([[0,.22],[.27,.22],[.25,.34],[.2,.55],[.14,.74],[0,.78]]),m.stone);
+  M(g,G.sph(1),m.stone,[0,.74,.02],null,[.2,.09,.15]);
+  M(g,G.sph(.1),m.trim,[0,.85,.08]);
+  M(g,G.box(.1,.05,.08),m.trim,[0,.79,.13]);
+  mirror(s=>{
+    M(g,G.sph(.017),m.glow,[s*.035,.87,.17]);
+    M(g,G.cone(.032,.15,8),m.trim,[s*.11,.95,.05],[0,0,-s*.95]);
+    M(g,G.cone(.019,.11,8),m.trim,[s*.19,1.03,.05],[0,0,-s*.25]);
+  });
+  ring(g,10,.17,.69,p=>M(p,G.sph(.022),m.trim),0,-.6);
+  M(g,G.cyl(.016,.021,1.22,8),m.dark,[.25,.73,.05],[0,0,.05]);
+  M(g,G.sph(.05),m.trim,[.22,1.35,.05]);
+  M(g,G.oct(.045),m.glow,[.22,1.44,.05]);
+  mirror(s=>M(g,G.box(.015,.09,.03),m.trim,[.22+s*.05,1.27,.05],[0,0,s*.2]));
+},
+queen(g,m){
+  M(g,lathe([[0,.22],[.31,.22],[.27,.3],[.19,.55],[.14,.85],[.12,1],[.16,1.06],[0,1.08]]),m.stone);
+  ring(g,10,.25,.3,p=>M(p,G.cone(.05,.13,6),m.stone,null,[PI,0,0]),.3);
+  mirror(s=>{
+    M(g,G.sph(.08),m.dark,[s*.15,1.04,0]);
+    M(g,G.cone(.026,.15,8),m.dark,[s*.18,1.13,0],[0,0,-s*.45]);
+    M(g,G.sph(.018),m.glow,[s*.035,1.18,.11]);
+    M(g,G.cone(.014,.05,6),m.trim,[s*.04,1.12,.12]);
+  });
+  M(g,G.sph(1),m.stone,[0,1.16,.03],null,[.095,.085,.09]);
+  ring(g,6,.065,1.28,(p,i)=>M(p,G.cone(.02,.12+(i%2)*.09,6),m.dark),.38);
+  M(g,G.cyl(.014,.016,1.32,8),m.dark,[.25,.78,.03]);
+  M(g,G.tor(.14,.016,PI*.7),m.trim,[.17,1.42,.03],[0,0,.25]);
+  M(g,G.oct(.035),m.glow,[.25,1.46,.03]);
+},
+king(g,m){
+  M(g,lathe([[0,.22],[.34,.22],[.31,.3],[.27,.5],[.24,.85],[.2,1.02],[0,1.04]]),m.stone);
+  M(g,G.tor(.2,.06),m.dark,[0,1.0,0],[PI/2,0,0]);
+  mirror(s=>{
+    M(g,G.sph(.12),m.stone,[s*.22,1.02,0]);
+    M(g,G.cone(.035,.18,8),m.dark,[s*.26,1.13,0],[0,0,-s*.5]);
+    M(g,G.cone(.03,.15,8),m.dark,[s*.32,1.04,0],[0,0,-s*1.15]);
+    M(g,G.cone(.02,.09,6),m.trim,[s*.065,1.13,.17]);
+    M(g,G.sph(.02),m.glow,[s*.05,1.18,.16]);
+    M(g,G.cone(.045,.22,8),m.dark,[s*.15,1.3,.03],[0,0,-s*1.0]);
+    M(g,G.cone(.026,.15,8),m.dark,[s*.25,1.42,.03],[0,0,-s*.2]);
+    M(g,G.sph(.05),m.stone,[s*.045,1.0,.3]);
+  });
+  M(g,G.sph(1),m.stone,[0,1.16,.05],null,[.13,.12,.12]);
+  M(g,G.box(.19,.08,.12),m.stone,[0,1.09,.11]);
+  M(g,new THREE.SphereGeometry(.135,20,10,0,PI*2,0,PI/2),m.dark,[0,1.2,.04]);
+  M(g,G.cyl(.02,.02,.42,8),m.dark,[0,.98,.3]);
+  M(g,G.box(.25,.5,.022),m.dark,[0,.52,.3]);
+  M(g,G.box(.09,.06,.024),m.glow,[.07,.62,.3]);
+}
+};
+
+/* ---------- board ---------- */
+const SQ=1.3,S=1.35,COLS=['pawn','rook','knight','bishop','queen','king'];
+const NAMES={L:['Эльф-копейщик','Белая башня','Боевой конь','Эльфийский маг','Королева эльфов','Король людей'],D:['Орк-рубака','Крепость','Варг','Шаман','Колдунья','Вождь орков']};
+const board=new THREE.Group();scene.add(board);
+const sqL=std(slateL,0xffffff,.75),sqD=std(slateD,0xffffff,.85);
+for(let c=0;c<6;c++)for(let r=0;r<4;r++){
+  const m=M(board,G.box(SQ,.14,SQ),(c+r)%2?sqD:sqL,[(c-2.5)*SQ,-.07,(r-1.5)*SQ]);m.castShadow=false;
+}
+const frame=std(slateD,0x8a7a6a,.9);
+[[0,-.1,2*SQ+.18,6*SQ+.72,.2,.36],[0,-.1,-2*SQ-.18,6*SQ+.72,.2,.36],[3*SQ+.18,-.1,0,.36,.2,4*SQ],[-3*SQ-.18,-.1,0,.36,.2,4*SQ]].forEach(f=>{const m=M(board,G.box(f[3],f[4],f[5]),frame,[f[0],f[1],f[2]]);m.castShadow=false;});
+const floor=new THREE.Mesh(new THREE.CircleGeometry(30,48),new THREE.MeshStandardMaterial({color:0x17140f,roughness:1}));
+floor.rotation.x=-PI/2;floor.position.y=-.2;floor.receiveShadow=true;scene.add(floor);
+
+/* ---------- build pieces ---------- */
+const pieces={};
+['L','D'].forEach(side=>{
+  COLS.forEach((type,i)=>{
+    const g=new THREE.Group();const model=new THREE.Group();g.add(model);
+    base(model,MAT[side]);(side==='L'?L:D)[type](model,MAT[side]);
+    g.scale.setScalar(S);
+    const home=new THREE.Vector3((i-2.5)*SQ,0,side==='L'?1.5*SQ:-1.5*SQ);
+    g.position.copy(home);scene.add(g);
+    const box=new THREE.Box3().setFromObject(g);
+    const lbl=document.createElement('div');lbl.className='lbl '+side;lbl.textContent=NAMES[side][i];
+    document.getElementById('labels').appendChild(lbl);
+    pieces[side+type]={g,model,home,side,height:box.max.y,lbl,spin:Math.random()*PI*2};
+  });
+});
+
+/* ---------- camera orbit ---------- */
+const target=new THREE.Vector3(0,.7,0);
+let theta=0,phi=.52,dist=14,userDist=null,spinOn=!reduce;
+function fitDist(){const a=stage.clientWidth/stage.clientHeight;const half=4.6;return Math.max(9,half/Math.tan(THREE.MathUtils.degToRad(camera.fov/2))/Math.min(a,1.6)*1.05);}
+function placeCam(shake){
+  const d=userDist||fitDist();
+  camera.position.set(target.x+d*Math.sin(theta)*Math.cos(phi),target.y+d*Math.sin(phi),target.z+d*Math.cos(theta)*Math.cos(phi));
+  camera.lookAt(target);
+  if(shake){camera.position.x+=(Math.random()-.5)*shake;camera.position.y+=(Math.random()-.5)*shake;}
+}
+let drag=null;
+canvas.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointermove',e=>{if(!drag)return;theta-=(e.clientX-drag.x)*.006;phi=Math.min(1.35,Math.max(.12,phi+(e.clientY-drag.y)*.005));drag={x:e.clientX,y:e.clientY};});
+canvas.addEventListener('pointerup',()=>drag=null);
+canvas.addEventListener('pointercancel',()=>drag=null);
+canvas.addEventListener('wheel',e=>{e.preventDefault();userDist=Math.min(26,Math.max(4,(userDist||fitDist())*(1+Math.sign(e.deltaY)*.08)));},{passive:false});
+
+/* ---------- capture animation ---------- */
+const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+const clamp01=t=>Math.min(1,Math.max(0,t));
+const seg=(t,a,b)=>clamp01((t-a)/(b-a));
+let anim=null,shake=0;
+const flash=new THREE.PointLight(0xffffff,0,6);scene.add(flash);
+const dustTex=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d');const gr=g.createRadialGradient(32,32,0,32,32,32);gr.addColorStop(0,'rgba(255,255,255,1)');gr.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=gr;g.fillRect(0,0,64,64);return new THREE.CanvasTexture(c);})();
+
+function shatter(v,dir,side){
+  const mat=MAT[side].stone,frags=[];
+  const cnt=90;
+  for(let i=0;i<cnt;i++){
+    const r=.035+Math.random()*.075;
+    const geo=Math.random()<.5?new THREE.DodecahedronGeometry(r,0):new THREE.TetrahedronGeometry(r*1.3,0);
+    const m=new THREE.Mesh(geo,Math.random()<.12?MAT[side].glow:mat);m.castShadow=true;
+    const a=Math.random()*PI*2,rr=Math.sqrt(Math.random())*.3*S,h=Math.random()*v.height*.95;
+    m.position.set(v.home.x+Math.cos(a)*rr,h,v.home.z+Math.sin(a)*rr);
+    const origin=m.position.clone();
+    const sp=1.4+Math.random()*3;
+    const vel=new THREE.Vector3(dir.x*sp+(Math.random()-.5)*2.4,1.2+Math.random()*3.6,dir.z*sp+(Math.random()-.5)*2.4);
+    m.rotation.set(Math.random()*6,Math.random()*6,Math.random()*6);
+    scene.add(m);frags.push({m,vel,origin,spin:new THREE.Vector3(Math.random()*10-5,Math.random()*10-5,Math.random()*10-5),r});
+  }
+  const n=160,pos=new Float32Array(n*3),vels=[];
+  for(let i=0;i<n;i++){pos[i*3]=v.home.x+(Math.random()-.5)*.4;pos[i*3+1]=Math.random()*v.height*.8;pos[i*3+2]=v.home.z+(Math.random()-.5)*.4;vels.push(new THREE.Vector3((Math.random()-.5)*2+dir.x*.8,Math.random()*1.2,(Math.random()-.5)*2+dir.z*.8));}
+  const pg=new THREE.BufferGeometry();pg.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  const pm=new THREE.PointsMaterial({map:dustTex,size:.35,transparent:true,opacity:.7,depthWrite:false,color:side==='L'?0xe9e2d4:0x6d625a});
+  const dust=new THREE.Points(pg,pm);scene.add(dust);
+  return {frags,dust,vels};
+}
+
+function startCapture(att,vic){
+  if(anim)return;
+  const a=pieces[att],v=pieces[vic];
+  const dir=new THREE.Vector3().subVectors(v.home,a.home).setY(0).normalize();
+  anim={a,v,t:0,dir,P:v.home.clone().addScaledVector(dir,-.95),face:Math.atan2(dir.x,dir.z),back:Math.atan2(-dir.x,-dir.z),fx:null};
+  a.model.rotation.y=0;v.model.rotation.y=0;
+  flash.color.set(a.side==='L'?0x8fd3ff:0xff5a2a);
+  document.querySelectorAll('#capL,#capD').forEach(b=>b.disabled=true);
+}
+const tmp=new THREE.Vector3();
+function lerpAngle(a,b,t){let d=((b-a+PI)%(2*PI)+2*PI)%(2*PI)-PI;return a+d*t;}
+function stepAnim(dt){
+  const A=anim,a=A.a,v=A.v,g=a.g;A.t+=dt;const t=A.t;
+  // turn to face
+  g.rotation.y=lerpAngle(0,A.face,ease(seg(t,0,.3)));
+  // leap arc to approach point
+  if(t<1.05){const u=ease(seg(t,.25,1.05));tmp.lerpVectors(a.home,A.P,u);g.position.set(tmp.x,Math.sin(PI*seg(t,.25,1.05))*1.5,tmp.z);g.rotation.x=Math.sin(PI*seg(t,.25,1.05))*.25;}
+  // wind up and strike
+  else if(t<1.6){
+    const w=seg(t,1.05,1.25),s=seg(t,1.25,1.36),r=ease(seg(t,1.36,1.6));
+    let rx=-.4*ease(w);if(s>0)rx=-.4+.95*s;if(r>0)rx=.55*(1-r);
+    const lunge=s>0?(r>0?.4*(1-r):.4*s):0;
+    g.position.set(A.P.x+A.dir.x*lunge,0,A.P.z+A.dir.z*lunge);g.rotation.x=rx;
+    if(!A.fx&&t>=1.3){A.fx=shatter(v,A.dir,v.side);v.g.visible=false;flash.position.set(v.home.x,1,v.home.z);flash.intensity=6;shake=.18;}
+  }
+  // step into the captured square
+  else if(t<2.15){const u=ease(seg(t,1.6,2.15));tmp.lerpVectors(A.P,v.home,u);g.position.set(tmp.x,Math.sin(PI*u)*.35,tmp.z);g.rotation.x=0;}
+  // hold, then turn and go home
+  else if(t<3.6){g.position.copy(v.home);g.rotation.y=lerpAngle(A.face,A.back,ease(seg(t,3.2,3.6)));}
+  else if(t<4.6){g.rotation.y=A.back;const u=ease(seg(t,3.6,4.6));tmp.lerpVectors(v.home,a.home,u);g.position.set(tmp.x,Math.sin(PI*u)*1.2,tmp.z);}
+  else{g.position.copy(a.home);g.rotation.y=lerpAngle(A.back,0,ease(seg(t,4.6,5)));}
+  // fragments: fall, then rewind back into the statue
+  if(A.fx){
+    const rew=seg(t,3.5,4.5);
+    A.fx.frags.forEach(f=>{
+      if(rew<=0){
+        f.vel.y-=9.8*dt;f.m.position.addScaledVector(f.vel,dt);
+        if(f.m.position.y<f.r){f.m.position.y=f.r;f.vel.y*=-.28;f.vel.x*=.6;f.vel.z*=.6;f.spin.multiplyScalar(.6);}
+        f.m.rotation.x+=f.spin.x*dt;f.m.rotation.y+=f.spin.y*dt;f.m.rotation.z+=f.spin.z*dt;
+        f.rest=f.rest||new THREE.Vector3();f.rest.copy(f.m.position);
+      }else{f.m.position.lerpVectors(f.rest,f.origin,ease(rew));f.m.rotation.x+=dt*4;}
+    });
+    const p=A.fx.dust.geometry.attributes.position;
+    for(let i=0;i<A.fx.vels.length;i++){const vv=A.fx.vels[i];vv.multiplyScalar(.97);p.array[i*3]+=vv.x*dt;p.array[i*3+1]+=vv.y*dt;p.array[i*3+2]+=vv.z*dt;}
+    p.needsUpdate=true;
+    A.fx.dust.material.opacity=Math.max(0,.7*(1-seg(t,1.3,3.2)));
+    if(rew>0){flash.position.set(v.home.x,.8,v.home.z);flash.color.set(v.side==='L'?0x8fd3ff:0xff5a2a);flash.intensity=Math.sin(PI*rew)*3;}
+    if(t>=4.5&&!A.restored){A.restored=true;v.g.visible=true;A.fx.frags.forEach(f=>{scene.remove(f.m);f.m.geometry.dispose();});scene.remove(A.fx.dust);}
+  }
+  if(t>=5){g.rotation.set(0,0,0);anim=null;document.querySelectorAll('#capL,#capD').forEach(b=>b.disabled=false);}
+}
+
+/* ---------- UI ---------- */
+document.getElementById('capL').onclick=()=>startCapture('Lknight','Dpawn');
+document.getElementById('capD').onclick=()=>startCapture('Dknight','Lpawn');
+const spinBtn=document.getElementById('spin');
+function syncSpin(){spinBtn.textContent='Вращение фигур: '+(spinOn?'вкл':'выкл');spinBtn.setAttribute('aria-pressed',spinOn);}
+syncSpin();
+spinBtn.onclick=()=>{spinOn=!spinOn;syncSpin();};
+document.getElementById('reset').onclick=()=>{theta=0;phi=.52;userDist=null;Object.values(pieces).forEach(p=>p.model.rotation.y=0);};
+
+/* ---------- loop ---------- */
+function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+new ResizeObserver(resize).observe(stage);resize();
+const clock=new THREE.Clock();
+const proj=new THREE.Vector3();
+function frame_(){
+  const dt=Math.min(clock.getDelta(),.05);
+  Object.values(pieces).forEach(p=>{
+    const busy=anim&&(anim.a===p||anim.v===p);
+    if(spinOn&&!busy)p.model.rotation.y+=dt*.45;
+    else if(busy)p.model.rotation.y=lerpAngle(p.model.rotation.y,0,.2);
+  });
+  if(anim)stepAnim(dt);
+  flash.intensity*=anim&&anim.t>3.5?1:.9;
+  shake*=.88;
+  placeCam(shake>.005?shake:0);
+  renderer.render(scene,camera);
+  const W=stage.clientWidth,H=stage.clientHeight;
+  Object.values(pieces).forEach(p=>{
+    const top=p.side==='D';
+    proj.set(p.g.position.x,top?p.height+.15:-.05,p.g.position.z+(top?0:.75)).project(camera);
+    const hidden=!p.g.visible||proj.z>1;
+    p.lbl.hidden=hidden;
+    if(!hidden){p.lbl.style.left=((proj.x+1)/2*W)+'px';p.lbl.style.top=((1-proj.y)/2*H-(top?18:0))+'px';}
+  });
+  requestAnimationFrame(frame_);
+}
+requestAnimationFrame(frame_);
+})();
+</script>

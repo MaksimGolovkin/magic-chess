@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Каменные армии</title>
+  <meta name="description" content="3D-шахматы: люди и эльфы против орков. Фигуры-статуи сражаются, когда берут друг друга.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+SC:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+  <div id="stage" aria-label="Шахматная доска"></div>
+
+  <header class="hud" id="hud" hidden>
+    <div class="status">
+      <span class="mode" id="modeLabel"></span>
+      <strong id="statusText">Ход светлых</strong>
+    </div>
+    <div class="actions">
+      <button id="btnFlip" type="button">Повернуть доску</button>
+      <button id="btnNew" type="button">Новая партия</button>
+      <button id="btnResign" type="button" hidden>Сдаться</button>
+      <button id="btnMenu" type="button">Меню</button>
+    </div>
+  </header>
+
+  <div class="overlay" id="menu">
+    <section class="panel">
+      <h1>Каменные армии</h1>
+      <p class="tagline">Люди и эльфы против орков. Фигуры оживают и бьются, когда берут друг друга.</p>
+
+      <div class="modes" id="modeList">
+        <button class="mode-card" id="pickAI" type="button">
+          <span class="mode-title">Против компьютера</span>
+          <span class="mode-desc">Четыре уровня силы, от новичка до мастера.</span>
+        </button>
+        <button class="mode-card" id="pickOnline" type="button">
+          <span class="mode-title">С другом по ссылке</span>
+          <span class="mode-desc">Отправьте ссылку, друг откроет её и сядет за доску.</span>
+        </button>
+        <button class="mode-card" id="pickLocal" type="button">
+          <span class="mode-title">Вдвоём за одним экраном</span>
+          <span class="mode-desc">Ходите по очереди на одном устройстве.</span>
+        </button>
+      </div>
+
+      <div class="sub" id="aiSetup" hidden>
+        <h2>Игра против компьютера</h2>
+        <div class="field">
+          <span class="label">Ваша армия</span>
+          <div class="seg" role="radiogroup" id="colorSeg">
+            <button type="button" role="radio" data-color="w" aria-checked="true">Люди и эльфы</button>
+            <button type="button" role="radio" data-color="b" aria-checked="false">Орки</button>
+          </div>
+        </div>
+        <div class="field">
+          <span class="label">Сила компьютера</span>
+          <div class="seg" role="radiogroup" id="levelSeg"></div>
+        </div>
+        <div class="row">
+          <button class="primary" id="startAI" type="button">Начать</button>
+          <button class="ghost back" type="button">Назад</button>
+        </div>
+      </div>
+
+      <div class="sub" id="onlineSetup" hidden>
+        <h2>Игра с другом</h2>
+        <p id="onlineInfo">Создаём ссылку…</p>
+        <div class="link-box" id="linkBox" hidden>
+          <input id="linkInput" readonly aria-label="Ссылка-приглашение">
+          <button id="copyLink" type="button">Копировать</button>
+        </div>
+        <p class="hint">Вы играете за людей и эльфов, друг за орков. Не закрывайте вкладку, пока друг не подключится.</p>
+        <div class="row"><button class="ghost back" type="button">Назад</button></div>
+      </div>
+
+      <div class="sub" id="joinSetup" hidden>
+        <h2>Приглашение в игру</h2>
+        <p id="joinInfo">Подключаемся к сопернику…</p>
+        <div class="row"><button class="ghost" id="joinBack" type="button">В меню</button></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="overlay" id="promo" hidden>
+    <section class="panel small">
+      <h2>Во что превратить пешку?</h2>
+      <div class="promo-grid" id="promoGrid"></div>
+    </section>
+  </div>
+
+  <div class="overlay soft" id="result" hidden>
+    <section class="panel small">
+      <h2 id="resultTitle"></h2>
+      <p id="resultText"></p>
+      <div class="row">
+        <button class="primary" id="resultAgain" type="button">Ещё партию</button>
+        <button class="ghost" id="resultClose" type="button">Посмотреть доску</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
