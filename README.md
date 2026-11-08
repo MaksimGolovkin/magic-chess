@@ -20,8 +20,8 @@ npm run build    # static site in dist/
 
 ## Status (work in progress)
 
-Step 1 of the plan: a working game. Done in code: menu, vs computer, invite-link play, hot-seat, move highlights,
-move/capture/castling/promotion animations. Known issue: in a quick test the game sometimes stays "busy" after the
-computer's reply, so the next move is ignored. Still to check: online play between two browsers, phone layout.
+Step 1 of the plan: a working game. Works: menu, vs computer (4 levels), invite-link play, hot-seat, move highlights,
+move/capture/castling/promotion animations. Invite-link play was tested between two browsers against a local
+PeerJS server; set `VITE_PEER_HOST`/`VITE_PEER_PORT`/`VITE_PEER_SECURE=false` at build time to use your own server.
 
 `concept/pieces-sketch.html` is the first standalone sketch of the pieces.

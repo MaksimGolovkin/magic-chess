@@ -2,6 +2,12 @@
 import Peer from 'peerjs';
 
 const PREFIX = 'magic-chess-';
+// By default PeerJS uses its free public server. Set VITE_PEER_HOST (and VITE_PEER_PORT)
+// at build time to use your own signalling server instead.
+const env = import.meta.env;
+const PEER_OPTIONS = env.VITE_PEER_HOST
+  ? { host: env.VITE_PEER_HOST, port: Number(env.VITE_PEER_PORT || 443), path: env.VITE_PEER_PATH || '/', secure: env.VITE_PEER_SECURE !== 'false' }
+  : {};
 
 export function inviteLink(code) {
   return `${location.origin}${location.pathname}#join=${code}`;
@@ -21,7 +27,7 @@ export class Online {
 
   host() {
     const code = Math.random().toString(36).slice(2, 10);
-    this.peer = new Peer(PREFIX + code);
+    this.peer = new Peer(PREFIX + code, PEER_OPTIONS);
     this.peer.on('open', () => this.h.onLink(inviteLink(code)));
     this.peer.on('connection', (conn) => {
       if (this.conn) { conn.close(); return; } // the game is already full
@@ -31,7 +37,7 @@ export class Online {
   }
 
   join(code) {
-    this.peer = new Peer();
+    this.peer = new Peer(PEER_OPTIONS);
     this.peer.on('open', () => this.#attach(this.peer.connect(PREFIX + code, { reliable: true })));
     this.peer.on('error', (e) => this.h.onError(describe(e)));
   }
