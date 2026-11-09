@@ -255,7 +255,7 @@ export class Board3D {
 
   #dispose(obj) {
     this.scene.remove(obj);
-    obj.traverse((o) => o.geometry && o.geometry.dispose());
+    obj.traverse((o) => o.geometry && !o.geometry.userData.shared && o.geometry.dispose());
   }
 
   // ---------- highlights ----------

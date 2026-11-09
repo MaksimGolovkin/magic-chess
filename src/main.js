@@ -1,6 +1,6 @@
 import { Chess } from 'chess.js';
 import { Board3D } from './board3d.js';
-import { PIECE_NAMES } from './pieces.js';
+import { PIECE_NAMES, loadModels } from './pieces.js';
 import { Engine, LEVELS } from './ai.js';
 import { Online, joinCodeFromHash } from './net.js';
 
@@ -12,6 +12,10 @@ const chess = new Chess();
 const board = new Board3D($('stage'), { onSquareClick });
 board.setPosition(chess.board());
 board.idleSpin = true;
+loadModels().then((loaded) => {
+  // swap in sculpted models as soon as they arrive, unless a move is animating
+  if (loaded.length && !state.busy) board.setPosition(chess.board());
+});
 
 const state = {
   mode: null, // 'ai' | 'online' | 'local'

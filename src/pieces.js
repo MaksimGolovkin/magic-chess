@@ -3,6 +3,8 @@
 // Dark army (black): orcs in basalt with ember-red eyes.
 // Every model faces +Z and stands on a base whose top is at y = 0.22.
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
 const PI = Math.PI;
 
@@ -312,6 +314,52 @@ export const PIECE_NAMES = {
   b: { p: 'Орк-рубака', r: 'Крепость', n: 'Варг', b: 'Шаман', q: 'Колдунья', k: 'Вождь орков' },
 };
 
+// ---------- sculpted models (GLB) ----------
+// Optional files in public/models named like w_pawn.glb / b_king.glb replace the
+// code-built statue for that piece. The stone base stays the same for every piece.
+const TYPE_FILE = { p: 'pawn', r: 'rook', n: 'knight', b: 'bishop', q: 'queen', k: 'king' };
+const MODEL_HEIGHT = { p: 0.92, r: 0.88, n: 0.95, b: 1.15, q: 1.25, k: 1.38 };
+const MAX_WIDTH = 0.82;
+const models = {};
+
+function prepareModel(scene, type) {
+  scene.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = true;
+      o.receiveShadow = true;
+      o.geometry.userData.shared = true; // reused by every copy of this piece
+    }
+  });
+  const box = new THREE.Box3().setFromObject(scene);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const s = Math.min(MODEL_HEIGHT[type] / size.y, MAX_WIDTH / Math.max(size.x, size.z));
+  scene.scale.setScalar(s);
+  scene.position.set(-center.x * s, -box.min.y * s + 0.21, -center.z * s);
+  const wrap = new THREE.Group();
+  wrap.add(scene);
+  return wrap;
+}
+
+/** Load whatever GLB models exist. Missing files keep the code-built pieces. */
+export async function loadModels() {
+  const loader = new GLTFLoader();
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  const jobs = [];
+  for (const color of ['w', 'b']) {
+    for (const [type, name] of Object.entries(TYPE_FILE)) {
+      const url = new URL(`models/${color}_${name}.glb`, document.baseURI).href;
+      jobs.push(
+        loader.loadAsync(url)
+          .then((gltf) => { models[color + type] = prepareModel(gltf.scene, type); })
+          .catch(() => { /* no model yet for this piece */ }),
+      );
+    }
+  }
+  await Promise.all(jobs);
+  return Object.keys(models);
+}
+
 /**
  * Build one piece. color: 'w' | 'b', type: chess.js piece letter.
  * Returns { group, model, height } where group is positioned on the board
@@ -323,7 +371,9 @@ export function buildPiece(color, type) {
   group.add(model);
   const mats = MATERIALS[color];
   base(model, mats);
-  (color === 'w' ? LIGHT : DARK)[type](model, mats);
+  const sculpted = models[color + type];
+  if (sculpted) model.add(sculpted.clone());
+  else (color === 'w' ? LIGHT : DARK)[type](model, mats);
   const box = new THREE.Box3().setFromObject(group);
   return { group, model, height: box.max.y };
 }
