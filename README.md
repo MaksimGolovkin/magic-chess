@@ -26,7 +26,8 @@ PeerJS server; set `VITE_PEER_HOST`/`VITE_PEER_PORT`/`VITE_PEER_SECURE=false` at
 
 `concept/pieces-sketch.html` is the first standalone sketch of the pieces.
 
-## Fighters (test of fight animations)
+## Animated heroes
 
-The menu can switch the pieces to animated fighters: the CC0 "RobotExpressive" model by Tomás Laulhé
-(Quaternius), taken from the three.js examples (`public/models/fighters/robot.glb`). They walk, punch and die.
+The menu can switch the pieces to animated heroes: CC0 characters by Kay Lousberg from the
+KayKit Adventurers (light army: knights, barbarian, mage, rogues) and KayKit Skeletons (dark army) packs,
+in `public/models/heroes`. Each piece type has its own weapon and attack; shooters fire a bolt or a spell.

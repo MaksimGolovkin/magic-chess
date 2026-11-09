@@ -1,6 +1,6 @@
 import { Chess } from 'chess.js';
 import { Board3D } from './board3d.js';
-import { PIECE_NAMES, loadModels, loadFighters, setPieceStyle } from './pieces.js';
+import { PIECE_NAMES, loadModels, loadHeroes, setPieceStyle } from './pieces.js';
 import { Engine, LEVELS } from './ai.js';
 import { Online, joinCodeFromHash } from './net.js';
 
@@ -68,8 +68,8 @@ $('styleSeg').addEventListener('click', async (e) => {
   const b = e.target.closest('button');
   if (!b) return;
   const style = b.dataset.style;
-  if (style === 'fighters' && !(await loadFighters())) {
-    toast('Не удалось загрузить бойцов. Обновите страницу и попробуйте ещё раз.');
+  if (style === 'heroes' && !(await loadHeroes())) {
+    toast('Не удалось загрузить героев. Обновите страницу и попробуйте ещё раз.');
     return;
   }
   setPieceStyle(style);

@@ -355,12 +355,12 @@ export class Board3D {
     await this.tween(0.16, (u) => { g.rotation.y = lerpAngle(yaw0, face, ease(u)); });
     if (rec.actions) {
       // fighters walk (or jump, for knights) instead of gliding
-      this.act(rec, hop ? 'Jump' : 'Walking', { speed: hop ? 1.3 : 1.4 });
+      this.act(rec, hop ? rec.anim.jump : rec.anim.walk, { speed: hop ? 1.2 : 1.5 });
       await this.tween(Math.max(0.45, dist * 0.42), (u) => {
         g.position.lerpVectors(from, to, hop ? ease(u) : u);
         g.position.y = hop ? Math.sin(PI * u) * 0.7 : 0;
       });
-      this.act(rec, 'Idle');
+      this.act(rec, rec.anim.idle);
     } else {
       const h = hop ? 0.9 : 0.16;
       await this.tween(Math.min(0.75, 0.28 + dist * 0.06), (u) => {
@@ -378,7 +378,9 @@ export class Board3D {
     const from = g.position.clone();
     const dir = new THREE.Vector3().subVectors(to, from).setY(0).normalize();
     const style = rec.actions ? 'brawl' : rec.type === 'p' ? 'stab' : 'bash';
-    const reach = style === 'stab' ? 0.86 : style === 'brawl' ? 0.62 : 0.72;
+    const fullDist = from.distanceTo(to);
+    let reach = style === 'stab' ? 0.86 : style === 'brawl' ? 0.7 : 0.72;
+    if (rec.anim?.ranged) reach = Math.min(fullDist, 1.9); // shooters fire from a distance
     const P = to.clone().addScaledVector(dir, -reach);
     const yaw0 = g.rotation.y;
     const face = Math.atan2(dir.x, dir.z);
@@ -394,7 +396,7 @@ export class Board3D {
     const travel = from.distanceTo(P);
     if (travel > 0.05 && rec.actions) {
       const jump = rec.type === 'n';
-      this.act(rec, jump ? 'Jump' : 'Running', { speed: jump ? 1.3 : 1.2 });
+      this.act(rec, jump ? rec.anim.jump : rec.anim.run, { speed: jump ? 1.2 : 1.1 });
       await this.tween(Math.max(0.4, travel * 0.26), (u) => {
         g.position.lerpVectors(from, P, jump ? ease(u) : u);
         g.position.y = jump ? Math.sin(PI * u) * 0.7 : 0;
@@ -416,32 +418,84 @@ export class Board3D {
     await this.wait(0.12);
     // step into the conquered square
     const start = g.position.clone();
-    this.act(rec, 'Walking', { speed: 1.4 });
-    await this.tween(rec.actions ? 0.5 : 0.32, (u) => {
+    if (rec.actions) this.act(rec, rec.anim.walk, { speed: 1.5 });
+    const stepDist = start.distanceTo(to);
+    await this.tween(rec.actions ? Math.max(0.45, stepDist * 0.45) : 0.32, (u) => {
       g.position.lerpVectors(start, to, ease(u));
       if (!rec.actions) g.position.y = Math.sin(PI * u) * 0.25;
     });
-    this.act(rec, 'Idle');
+    if (rec.actions) this.act(rec, rec.anim.idle);
     g.position.copy(to);
     await this.tween(0.2, (u) => { g.rotation.y = lerpAngle(face, defaultYaw(rec.color), ease(u)); });
   }
 
-  // Fighters: a punch, the victim plays its death, is knocked back and bursts.
+  // Heroes: the attack clip plays (with a projectile for shooters), the victim plays
+  // its death, is knocked back, then sinks into the board.
   async #brawl(rec, victim, dir) {
-    const punch = this.act(rec, 'Punch', { once: true, speed: 1.15 });
-    await this.wait(punch * 0.42);
+    const A = rec.anim;
+    const dur = this.act(rec, A.attack, { once: true, speed: 1.1 });
+    if (A.ranged) {
+      await this.wait(dur * 0.4);
+      await this.#projectile(rec, victim, A.ranged);
+    } else {
+      await this.wait(dur * 0.48);
+    }
     this.flash.color.set(GLOW_COLOR[rec.color]);
     this.flash.position.copy(victim.group.position).setY(0.6);
     this.flash.intensity = 18;
     this.shake = 0.07;
-    const death = this.act(victim, 'Death', { once: true, speed: 1.25, fade: 0.08 });
+    const death = this.act(victim, victim.anim.death, { once: true, speed: 1.2, fade: 0.08 });
     const vp = victim.group.position.clone();
-    await this.tween(Math.max(0.35, death * 0.8), (u) => {
+    await this.tween(0.35, (u) => {
       const e = ease(u);
-      victim.group.position.set(vp.x + dir.x * 0.3 * e, 0, vp.z + dir.z * 0.3 * e);
+      victim.group.position.set(vp.x + dir.x * 0.28 * e, 0, vp.z + dir.z * 0.28 * e);
     });
-    this.#shatter(victim, dir);
-    this.act(rec, 'Idle', { fade: 0.3 });
+    this.#sinkAway(victim, Math.max(0.5, death * 0.85 - 0.35));
+    await this.wait(Math.max(0.15, dur * (A.ranged ? 0.3 : 0.45) - 0.35));
+    this.act(rec, A.idle, { fade: 0.3 });
+  }
+
+  #projectile(rec, victim, kind) {
+    const color = GLOW_COLOR[rec.color];
+    const s = PIECE_SCALE;
+    const from = rec.group.position.clone().setY(0.62 * s);
+    const to = victim.group.position.clone().setY(0.55 * s);
+    const dirV = to.clone().sub(from).normalize();
+    from.addScaledVector(dirV, 0.25);
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    const geo = kind === 'magic' ? new THREE.SphereGeometry(0.07, 12, 10) : new THREE.CylinderGeometry(0.012, 0.012, 0.3, 6);
+    const bolt = new THREE.Mesh(geo, mat);
+    if (kind !== 'magic') bolt.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirV);
+    const light = new THREE.PointLight(color, 6, 2, 2);
+    bolt.add(light);
+    this.scene.add(bolt);
+    const time = Math.max(0.18, from.distanceTo(to) * 0.12);
+    return this.tween(time, (u) => {
+      bolt.position.lerpVectors(from, to, u);
+      if (kind === 'magic') bolt.scale.setScalar(1 + Math.sin(u * PI * 6) * 0.25);
+    }).then(() => {
+      this.scene.remove(bolt);
+      geo.dispose();
+      mat.dispose();
+    });
+  }
+
+  #sinkAway(victim, delay) {
+    let t = 0;
+    const g = victim.group;
+    this.effects.push((dt) => {
+      t += dt;
+      if (t < delay) return true;
+      const u = Math.min(1, (t - delay) / 0.8);
+      g.position.y = -0.6 * u * u;
+      g.scale.setScalar(PIECE_SCALE * (1 - 0.3 * u));
+      if (u >= 1) {
+        if (victim.mixer) this.mixers.delete(victim.mixer);
+        this.#dispose(g);
+        return false;
+      }
+      return true;
+    });
   }
 
   // Generic blow: lean back, slam forward, the victim bursts.

@@ -367,7 +367,7 @@ export async function loadModels() {
  * and model is the inner node that can be spun or tilted.
  */
 export function buildPiece(color, type) {
-  if (pieceStyle === 'fighters' && fighter) return buildFighter(color, type);
+  if (pieceStyle === 'heroes' && heroesLoaded) return buildHero(color, type);
   const group = new THREE.Group();
   const model = new THREE.Group();
   group.add(model);
@@ -380,52 +380,72 @@ export function buildPiece(color, type) {
   return { group, model, height: box.max.y };
 }
 
-// ---------- animated fighters (test of fight animations) ----------
-// A free CC0 animated robot by Tomas Laulhe (Quaternius), from the three.js examples.
-// Every piece type uses the same robot at a different size, with a chess glyph above it.
+// ---------- animated heroes ----------
+// Free CC0 characters by Kay Lousberg (KayKit Adventurers and Skeletons packs):
+// humans for the light army, skeletons for the dark army. Rigged, with 75+ animations.
 let pieceStyle = 'statues';
 export const setPieceStyle = (style) => { pieceStyle = style; };
 export const getPieceStyle = () => pieceStyle;
 
-const FIGHTER_HEIGHT = { p: 0.72, n: 0.8, b: 0.86, r: 0.9, q: 0.96, k: 1.04 };
-const FIGHTER_TINT = {
-  w: { Main: 0xe6dfd2, Grey: 0x8fc3e0, Black: 0x2a2a2a },
-  b: { Main: 0x3b3431, Grey: 0xc0461c, Black: 0x111111 },
-};
-let fighter = null;
+// Weapon and prop meshes baked into the adventurer models; all hidden unless listed in `keep`.
+const ADVENTURER_PROPS = ['1H_Sword_Offhand', 'Badge_Shield', 'Rectangle_Shield', 'Round_Shield', 'Spike_Shield', '1H_Sword',
+  '2H_Sword', '1H_Axe_Offhand', 'Barbarian_Round_Shield', '1H_Axe', '2H_Axe', 'Mug', 'Spellbook', 'Spellbook_open', '1H_Wand',
+  '2H_Staff', 'Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Knife', 'Throwable'];
 
-export async function loadFighters() {
-  if (fighter) return true;
+export const ROSTER = {
+  w: {
+    p: { file: 'Knight', keep: ['1H_Sword', 'Round_Shield', 'Knight_Helmet'], attack: '1H_Melee_Attack_Stab', h: 0.78 },
+    r: { file: 'Barbarian', keep: ['2H_Axe', 'Barbarian_Hat'], attack: '2H_Melee_Attack_Chop', idle: '2H_Melee_Idle', h: 0.92 },
+    n: { file: 'Rogue_Hooded', keep: ['Knife', 'Knife_Offhand'], attack: 'Dualwield_Melee_Attack_Slice', h: 0.82 },
+    b: { file: 'Mage', keep: ['2H_Staff', 'Mage_Hat'], attack: 'Spellcast_Shoot', ranged: 'magic', h: 0.88 },
+    q: { file: 'Rogue', keep: ['1H_Crossbow'], attack: '1H_Ranged_Shoot', ranged: 'bolt', h: 0.9 },
+    k: { file: 'Knight', keep: ['2H_Sword', 'Knight_Helmet'], attack: '2H_Melee_Attack_Slice', idle: '2H_Melee_Idle', h: 1.02 },
+  },
+  b: {
+    p: { file: 'Skeleton_Minion', props: { r: 'Skeleton_Blade' }, attack: '1H_Melee_Attack_Chop', h: 0.78 },
+    r: { file: 'Skeleton_Warrior', props: { r: 'Skeleton_Axe', l: 'Skeleton_Shield_Large_A' }, attack: '1H_Melee_Attack_Slice_Horizontal', h: 0.92 },
+    n: { file: 'Skeleton_Rogue', props: { r: 'Skeleton_Blade', l: 'Skeleton_Blade' }, attack: 'Dualwield_Melee_Attack_Chop', h: 0.82 },
+    b: { file: 'Skeleton_Mage', props: { r: 'Skeleton_Staff' }, attack: 'Spellcast_Shoot', ranged: 'magic', h: 0.88 },
+    q: { file: 'Skeleton_Rogue', props: { r: 'Skeleton_Crossbow' }, attack: '1H_Ranged_Shoot', ranged: 'bolt', h: 0.9 },
+    k: { file: 'Skeleton_Warrior', props: { r: 'Skeleton_Blade', l: 'Skeleton_Shield_Small_A' }, attack: '1H_Melee_Attack_Jump_Chop', h: 1.02 },
+  },
+};
+const HERO_HEIGHT = 2.4; // model units of a standing KayKit character
+const heroAssets = {};
+let heroesLoaded = false;
+
+export async function loadHeroes() {
+  if (heroesLoaded) return true;
   const loader = new GLTFLoader();
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  const files = new Set();
+  for (const side of Object.values(ROSTER)) {
+    for (const r of Object.values(side)) {
+      files.add(r.file);
+      for (const p of Object.values(r.props || {})) files.add(p);
+    }
+  }
   try {
-    const gltf = await loader.loadAsync(new URL('models/fighters/robot.glb', document.baseURI).href);
-    const mats = { w: {}, b: {} };
-    gltf.scene.traverse((o) => {
-      if (!o.isMesh) return;
-      o.castShadow = true;
-      o.receiveShadow = true;
-      o.frustumCulled = false;
-      o.geometry.userData.shared = true;
-      const name = o.material.name;
-      for (const c of ['w', 'b']) {
-        if (mats[c][name]) continue;
-        const m = o.material.clone();
-        if (FIGHTER_TINT[c][name] !== undefined) m.color.setHex(FIGHTER_TINT[c][name]);
-        m.roughness = 0.55;
-        m.metalness = 0.1;
-        mats[c][name] = m;
-      }
-    });
-    const box = new THREE.Box3().setFromObject(gltf.scene);
-    fighter = { scene: gltf.scene, animations: gltf.animations, mats, height: box.max.y - box.min.y, minY: box.min.y };
+    await Promise.all([...files].map(async (name) => {
+      const gltf = await loader.loadAsync(new URL(`models/heroes/${name}.glb`, document.baseURI).href);
+      gltf.scene.traverse((o) => {
+        if (!o.isMesh) return;
+        o.castShadow = true;
+        o.receiveShadow = true;
+        o.frustumCulled = false;
+        o.geometry.userData.shared = true;
+      });
+      heroAssets[name] = gltf;
+    }));
+    heroesLoaded = true;
     return true;
   } catch (e) {
-    console.warn('Could not load fighters', e);
+    console.warn('Could not load heroes', e);
     return false;
   }
 }
 
-const GLYPHS = { w: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' }, b: { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' } };
+const GLYPHS = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
 const glyphCache = {};
 function glyphSprite(color, type) {
   const key = color + type;
@@ -441,35 +461,55 @@ function glyphSprite(color, type) {
     g.font = '86px "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", serif';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.fillText(GLYPHS.b[type], 64, 70);
+    g.fillText(GLYPHS[type], 64, 70);
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
     glyphCache[key] = new THREE.SpriteMaterial({ map: t, depthWrite: false, transparent: true });
   }
   const sp = new THREE.Sprite(glyphCache[key]);
-  sp.scale.setScalar(0.24);
+  sp.scale.setScalar(0.22);
   return sp;
 }
 
-function buildFighter(color, type) {
+function buildHero(color, type) {
+  const cfg = ROSTER[color][type];
   const group = new THREE.Group();
   const model = new THREE.Group();
   group.add(model);
   base(model, MATERIALS[color]);
-  const body = cloneSkinned(fighter.scene);
-  body.traverse((o) => { if (o.isMesh) o.material = fighter.mats[color][o.material.name] || o.material; });
-  const h = FIGHTER_HEIGHT[type];
-  const s = h / fighter.height;
+  const gltf = heroAssets[cfg.file];
+  const body = cloneSkinned(gltf.scene);
+  body.traverse((o) => {
+    if (o.isMesh && ADVENTURER_PROPS.includes(o.name)) o.visible = (cfg.keep || []).includes(o.name);
+  });
+  for (const [hand, prop] of Object.entries(cfg.props || {})) {
+    const slot = body.getObjectByName(`handslot.${hand}`);
+    if (slot) slot.add(heroAssets[prop].scene.clone());
+  }
+  const s = cfg.h / HERO_HEIGHT;
   body.scale.setScalar(s);
-  body.position.y = 0.22 - fighter.minY * s;
+  body.position.y = 0.22;
   model.add(body);
   const glyph = glyphSprite(color, type);
-  glyph.position.y = 0.22 + h + 0.16;
+  glyph.position.y = 0.22 + cfg.h + 0.12;
   model.add(glyph);
+
   const mixer = new THREE.AnimationMixer(body);
   const actions = {};
-  for (const clip of fighter.animations) actions[clip.name] = mixer.clipAction(clip);
-  actions.Idle.play();
-  actions.Idle.time = Math.random() * actions.Idle.getClip().duration;
-  return { group, model, height: 0.22 + h, mixer, actions, current: 'Idle' };
+  for (const clip of gltf.animations) actions[clip.name] = mixer.clipAction(clip);
+  const has = (n) => (actions[n] ? n : null);
+  const anim = {
+    idle: cfg.idle || 'Idle',
+    walk: 'Walking_A',
+    run: 'Running_A',
+    jump: 'Jump_Full_Short',
+    attack: cfg.attack,
+    ranged: cfg.ranged || null,
+    death: has('Death_C_Skeletons') || 'Death_A',
+    hit: 'Hit_A',
+  };
+  const idle = actions[anim.idle];
+  idle.play();
+  idle.time = Math.random() * idle.getClip().duration;
+  return { group, model, height: 0.22 + cfg.h, mixer, actions, anim, current: anim.idle };
 }
