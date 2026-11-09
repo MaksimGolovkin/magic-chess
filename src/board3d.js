@@ -88,6 +88,8 @@ export class Board3D {
     this.#resize();
     this.clock = new THREE.Clock();
     renderer.setAnimationLoop(() => this.#frame());
+    // used by the video recorder to step the scene with a fixed time step
+    this.renderFrame = () => this.#frame();
   }
 
   // ---------- scene setup ----------
@@ -347,7 +349,9 @@ export class Board3D {
     const g = rec.group;
     const from = g.position.clone();
     const dir = new THREE.Vector3().subVectors(to, from).setY(0).normalize();
-    const P = to.clone().addScaledVector(dir, -0.72);
+    const style = rec.type === 'p' ? 'stab' : 'bash';
+    const reach = style === 'stab' ? 0.86 : 0.72;
+    const P = to.clone().addScaledVector(dir, -reach);
     const yaw0 = g.rotation.y;
     const face = Math.atan2(dir.x, dir.z);
     const vYaw0 = victim.group.rotation.y;
@@ -369,12 +373,28 @@ export class Board3D {
       });
     }
     g.position.copy(P);
-    // victim braces, attacker winds up
+
+    if (style === 'stab') await this.#stab(rec, victim, P, dir);
+    else await this.#bash(rec, victim, P, dir);
+
+    await this.wait(0.12);
+    // step into the conquered square
+    const start = g.position.clone();
+    await this.tween(0.32, (u) => {
+      g.position.lerpVectors(start, to, ease(u));
+      g.position.y = Math.sin(PI * u) * 0.25;
+    });
+    g.position.copy(to);
+    await this.tween(0.2, (u) => { g.rotation.y = lerpAngle(face, defaultYaw(rec.color), ease(u)); });
+  }
+
+  // Generic blow: lean back, slam forward, the victim bursts.
+  async #bash(rec, victim, P, dir) {
+    const g = rec.group;
     await this.tween(0.16, (u) => {
       rec.model.rotation.x = -0.4 * ease(u);
       victim.model.rotation.x = -0.12 * ease(u);
     });
-    // strike
     let broken = false;
     await this.tween(0.1, (u) => {
       rec.model.rotation.x = -0.4 + 0.95 * u;
@@ -389,14 +409,117 @@ export class Board3D {
       const l = 0.38 * (1 - e);
       g.position.set(P.x + dir.x * l, 0, P.z + dir.z * l);
     });
-    await this.wait(0.12);
-    // step into the conquered square
-    await this.tween(0.32, (u) => {
-      g.position.lerpVectors(P, to, ease(u));
-      g.position.y = Math.sin(PI * u) * 0.25;
+  }
+
+  // Spearman: draw back, lunge, a streak of light runs the victim through,
+  // the victim glows from inside, staggers and bursts.
+  async #stab(rec, victim, P, dir) {
+    const g = rec.group;
+    const glowColor = GLOW_COLOR[rec.color];
+    const at = (l) => g.position.set(P.x + dir.x * l, 0, P.z + dir.z * l);
+    // the victim's stone starts to glow, so give it its own materials
+    const hot = [];
+    victim.group.traverse((o) => {
+      if (o.isMesh && o.material.emissive) {
+        o.material = o.material.clone();
+        o.material.emissive = new THREE.Color(glowColor);
+        o.material.emissiveIntensity = 0;
+        hot.push(o.material);
+      }
     });
-    g.position.copy(to);
-    await this.tween(0.2, (u) => { g.rotation.y = lerpAngle(face, defaultYaw(rec.color), ease(u)); });
+
+    // draw back: lean back and step back a little
+    await this.tween(0.24, (u) => {
+      const e = ease(u);
+      rec.model.rotation.x = -0.28 * e;
+      at(-0.14 * e);
+      victim.model.rotation.x = -0.08 * e;
+    });
+    // lunge
+    let hit = false;
+    await this.tween(0.09, (u) => {
+      rec.model.rotation.x = -0.28 + 0.62 * u;
+      at(-0.14 + 0.5 * u);
+      if (!hit && u > 0.55) { hit = true; this.#spearStreak(rec, victim, dir, glowColor); }
+    });
+    if (!hit) this.#spearStreak(rec, victim, dir, glowColor);
+    // the victim is pierced: glow from inside, stagger back
+    const vp = victim.group.position.clone();
+    await this.tween(0.34, (u) => {
+      for (const m of hot) m.emissiveIntensity = 1.1 * ease(u);
+      victim.model.rotation.x = -0.08 - 0.3 * Math.sin(u * PI * 0.5);
+      victim.group.position.set(vp.x + dir.x * 0.12 * u + (Math.random() - 0.5) * 0.02 * u, 0, vp.z + dir.z * 0.12 * u);
+    });
+    this.#shatter(victim, dir);
+    for (const m of hot) m.dispose();
+    // recover from the lunge
+    await this.tween(0.24, (u) => {
+      const e = ease(u);
+      rec.model.rotation.x = 0.34 * (1 - e);
+      at(0.36 - 0.36 * e);
+    });
+  }
+
+  #spearStreak(rec, victim, dir, color) {
+    const s = PIECE_SCALE;
+    const startP = rec.group.position.clone().addScaledVector(dir, 0.2).setY(0.62 * s);
+    const endP = victim.group.position.clone().addScaledVector(dir, 0.45).setY(0.5 * s);
+    const len = startP.distanceTo(endP);
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
+    const core = new THREE.Mesh(new THREE.ConeGeometry(0.035, len, 10, 1, true), mat);
+    const halo = new THREE.Mesh(new THREE.ConeGeometry(0.1, len, 12, 1, true), mat.clone());
+    halo.material.opacity = 0.35;
+    const streak = new THREE.Group();
+    streak.add(core, halo);
+    streak.position.lerpVectors(startP, endP, 0.5);
+    // cones point +Y; turn the tip towards the victim
+    streak.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), endP.clone().sub(startP).normalize());
+    this.scene.add(streak);
+
+    // sparks at the point of impact
+    const hitP = victim.group.position.clone().addScaledVector(dir, -0.15).setY(0.5 * s);
+    const n = 60;
+    const arr = new Float32Array(n * 3);
+    const vels = [];
+    for (let i = 0; i < n; i++) {
+      arr.set([hitP.x, hitP.y, hitP.z], i * 3);
+      vels.push(new THREE.Vector3((Math.random() - 0.5) * 3 - dir.x * 1.5, Math.random() * 2.5, (Math.random() - 0.5) * 3 - dir.z * 1.5));
+    }
+    const pg = new THREE.BufferGeometry();
+    pg.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    const pm = new THREE.PointsMaterial({ map: this.dustTex, color, size: 0.12, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    const sparks = new THREE.Points(pg, pm);
+    this.scene.add(sparks);
+
+    this.flash.color.set(color);
+    this.flash.position.copy(hitP);
+    this.flash.intensity = 22;
+    this.shake = 0.06;
+
+    let t = 0;
+    this.effects.push((dt) => {
+      t += dt;
+      const fade = Math.max(0, 1 - t / 0.45);
+      core.material.opacity = 0.95 * fade;
+      halo.material.opacity = 0.35 * fade;
+      streak.scale.set(1 + t * 2, 1, 1 + t * 2);
+      const p = pg.attributes.position;
+      for (let i = 0; i < n; i++) {
+        vels[i].y -= 6 * dt;
+        p.array[i * 3] += vels[i].x * dt;
+        p.array[i * 3 + 1] = Math.max(0.02, p.array[i * 3 + 1] + vels[i].y * dt);
+        p.array[i * 3 + 2] += vels[i].z * dt;
+      }
+      p.needsUpdate = true;
+      pm.opacity = Math.max(0, 1 - t / 0.8);
+      if (t > 0.8) {
+        this.scene.remove(streak, sparks);
+        core.geometry.dispose(); halo.geometry.dispose(); mat.dispose(); halo.material.dispose();
+        pg.dispose(); pm.dispose();
+        return false;
+      }
+      return true;
+    });
   }
 
   #shatter(victim, dir) {
