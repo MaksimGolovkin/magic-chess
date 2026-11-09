@@ -318,7 +318,7 @@ export const PIECE_NAMES = {
 // Optional files in public/models named like w_pawn.glb / b_king.glb replace the
 // code-built statue for that piece. The stone base stays the same for every piece.
 const TYPE_FILE = { p: 'pawn', r: 'rook', n: 'knight', b: 'bishop', q: 'queen', k: 'king' };
-const MODEL_HEIGHT = { p: 0.92, r: 0.88, n: 0.95, b: 1.15, q: 1.25, k: 1.38 };
+const MODEL_HEIGHT = { p: 0.92, r: 1.0, n: 0.95, b: 1.15, q: 1.25, k: 1.38 };
 const MAX_WIDTH = 0.82;
 const models = {};
 
