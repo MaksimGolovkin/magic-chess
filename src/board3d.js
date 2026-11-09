@@ -58,6 +58,7 @@ export class Board3D {
     this.phi = 0.95;
     this.userDist = null;
     this.speed = 1;
+    this.mixers = new Set();
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -235,6 +236,7 @@ export class Board3D {
   setPosition(boardArray) {
     for (const p of this.pieces.values()) this.#dispose(p.group);
     this.pieces.clear();
+    this.mixers.clear();
     for (const row of boardArray) {
       for (const cell of row) {
         if (cell) this.#addPiece(cell.square, cell.color, cell.type);
@@ -252,7 +254,23 @@ export class Board3D {
     p.group.userData.square = sq;
     this.scene.add(p.group);
     this.pieces.set(sq, p);
+    if (p.mixer) this.mixers.add(p.mixer);
     return p;
+  }
+
+  /** Play a fighter's animation clip; returns its duration in seconds (0 for statues). */
+  act(rec, name, { once = false, fade = 0.18, speed = 1 } = {}) {
+    if (!rec.actions || !rec.actions[name]) return 0;
+    const next = rec.actions[name];
+    const prev = rec.actions[rec.current];
+    next.reset();
+    next.setEffectiveTimeScale(speed);
+    next.setEffectiveWeight(1);
+    if (once) { next.setLoop(THREE.LoopOnce, 1); next.clampWhenFinished = true; } else next.setLoop(THREE.LoopRepeat, Infinity);
+    next.play();
+    if (prev && prev !== next) prev.crossFadeTo(next, fade, false);
+    rec.current = name;
+    return next.getClip().duration / speed;
   }
 
   #dispose(obj) {
@@ -335,12 +353,22 @@ export class Board3D {
     const yaw0 = g.rotation.y;
     const face = Math.atan2(to.x - from.x, to.z - from.z);
     await this.tween(0.16, (u) => { g.rotation.y = lerpAngle(yaw0, face, ease(u)); });
-    const h = hop ? 0.9 : 0.16;
-    await this.tween(Math.min(0.75, 0.28 + dist * 0.06), (u) => {
-      g.position.lerpVectors(from, to, ease(u));
-      g.position.y = Math.sin(PI * u) * h;
-      rec.model.rotation.x = Math.sin(PI * u) * (hop ? 0.2 : 0.08);
-    });
+    if (rec.actions) {
+      // fighters walk (or jump, for knights) instead of gliding
+      this.act(rec, hop ? 'Jump' : 'Walking', { speed: hop ? 1.3 : 1.4 });
+      await this.tween(Math.max(0.45, dist * 0.42), (u) => {
+        g.position.lerpVectors(from, to, hop ? ease(u) : u);
+        g.position.y = hop ? Math.sin(PI * u) * 0.7 : 0;
+      });
+      this.act(rec, 'Idle');
+    } else {
+      const h = hop ? 0.9 : 0.16;
+      await this.tween(Math.min(0.75, 0.28 + dist * 0.06), (u) => {
+        g.position.lerpVectors(from, to, ease(u));
+        g.position.y = Math.sin(PI * u) * h;
+        rec.model.rotation.x = Math.sin(PI * u) * (hop ? 0.2 : 0.08);
+      });
+    }
     g.position.copy(to);
     await this.tween(0.2, (u) => { g.rotation.y = lerpAngle(face, defaultYaw(rec.color), ease(u)); });
   }
@@ -349,8 +377,8 @@ export class Board3D {
     const g = rec.group;
     const from = g.position.clone();
     const dir = new THREE.Vector3().subVectors(to, from).setY(0).normalize();
-    const style = rec.type === 'p' ? 'stab' : 'bash';
-    const reach = style === 'stab' ? 0.86 : 0.72;
+    const style = rec.actions ? 'brawl' : rec.type === 'p' ? 'stab' : 'bash';
+    const reach = style === 'stab' ? 0.86 : style === 'brawl' ? 0.62 : 0.72;
     const P = to.clone().addScaledVector(dir, -reach);
     const yaw0 = g.rotation.y;
     const face = Math.atan2(dir.x, dir.z);
@@ -364,7 +392,14 @@ export class Board3D {
     });
     // leap to striking distance
     const travel = from.distanceTo(P);
-    if (travel > 0.05) {
+    if (travel > 0.05 && rec.actions) {
+      const jump = rec.type === 'n';
+      this.act(rec, jump ? 'Jump' : 'Running', { speed: jump ? 1.3 : 1.2 });
+      await this.tween(Math.max(0.4, travel * 0.26), (u) => {
+        g.position.lerpVectors(from, P, jump ? ease(u) : u);
+        g.position.y = jump ? Math.sin(PI * u) * 0.7 : 0;
+      });
+    } else if (travel > 0.05) {
       const h = Math.min(1.3, 0.35 + travel * 0.16);
       await this.tween(Math.min(0.8, 0.3 + travel * 0.07), (u) => {
         g.position.lerpVectors(from, P, ease(u));
@@ -374,18 +409,39 @@ export class Board3D {
     }
     g.position.copy(P);
 
-    if (style === 'stab') await this.#stab(rec, victim, P, dir);
+    if (style === 'brawl') await this.#brawl(rec, victim, dir);
+    else if (style === 'stab') await this.#stab(rec, victim, P, dir);
     else await this.#bash(rec, victim, P, dir);
 
     await this.wait(0.12);
     // step into the conquered square
     const start = g.position.clone();
-    await this.tween(0.32, (u) => {
+    this.act(rec, 'Walking', { speed: 1.4 });
+    await this.tween(rec.actions ? 0.5 : 0.32, (u) => {
       g.position.lerpVectors(start, to, ease(u));
-      g.position.y = Math.sin(PI * u) * 0.25;
+      if (!rec.actions) g.position.y = Math.sin(PI * u) * 0.25;
     });
+    this.act(rec, 'Idle');
     g.position.copy(to);
     await this.tween(0.2, (u) => { g.rotation.y = lerpAngle(face, defaultYaw(rec.color), ease(u)); });
+  }
+
+  // Fighters: a punch, the victim plays its death, is knocked back and bursts.
+  async #brawl(rec, victim, dir) {
+    const punch = this.act(rec, 'Punch', { once: true, speed: 1.15 });
+    await this.wait(punch * 0.42);
+    this.flash.color.set(GLOW_COLOR[rec.color]);
+    this.flash.position.copy(victim.group.position).setY(0.6);
+    this.flash.intensity = 18;
+    this.shake = 0.07;
+    const death = this.act(victim, 'Death', { once: true, speed: 1.25, fade: 0.08 });
+    const vp = victim.group.position.clone();
+    await this.tween(Math.max(0.35, death * 0.8), (u) => {
+      const e = ease(u);
+      victim.group.position.set(vp.x + dir.x * 0.3 * e, 0, vp.z + dir.z * 0.3 * e);
+    });
+    this.#shatter(victim, dir);
+    this.act(rec, 'Idle', { fade: 0.3 });
   }
 
   // Generic blow: lean back, slam forward, the victim bursts.
@@ -526,6 +582,7 @@ export class Board3D {
     const pos = victim.group.position.clone();
     const height = victim.height * PIECE_SCALE;
     const mats = MATERIALS[victim.color];
+    if (victim.mixer) this.mixers.delete(victim.mixer);
     this.#dispose(victim.group);
 
     const frags = [];
@@ -632,6 +689,7 @@ export class Board3D {
       tw.fn(u);
       if (u >= 1) { this.tweens.splice(i, 1); tw.resolve(); }
     }
+    for (const m of this.mixers) m.update(dt * this.speed);
     this.effects = this.effects.filter((f) => f(dt) !== false);
     this.flash.intensity *= 0.9;
     for (const c of this.highlights.children) {

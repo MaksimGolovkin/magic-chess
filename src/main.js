@@ -1,6 +1,6 @@
 import { Chess } from 'chess.js';
 import { Board3D } from './board3d.js';
-import { PIECE_NAMES, loadModels } from './pieces.js';
+import { PIECE_NAMES, loadModels, loadFighters, setPieceStyle } from './pieces.js';
 import { Engine, LEVELS } from './ai.js';
 import { Online, joinCodeFromHash } from './net.js';
 
@@ -63,6 +63,18 @@ $('levelSeg').addEventListener('click', (e) => {
   if (!b) return;
   state.level = Number(b.dataset.level);
   syncSeg($('levelSeg'), 'level', state.level);
+});
+$('styleSeg').addEventListener('click', async (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const style = b.dataset.style;
+  if (style === 'fighters' && !(await loadFighters())) {
+    toast('Не удалось загрузить бойцов. Обновите страницу и попробуйте ещё раз.');
+    return;
+  }
+  setPieceStyle(style);
+  syncSeg($('styleSeg'), 'style', style);
+  if (!state.busy) board.setPosition(chess.board());
 });
 $('colorSeg').addEventListener('click', (e) => {
   const b = e.target.closest('button');

@@ -25,3 +25,8 @@ move/capture/castling/promotion animations. Invite-link play was tested between 
 PeerJS server; set `VITE_PEER_HOST`/`VITE_PEER_PORT`/`VITE_PEER_SECURE=false` at build time to use your own server.
 
 `concept/pieces-sketch.html` is the first standalone sketch of the pieces.
+
+## Fighters (test of fight animations)
+
+The menu can switch the pieces to animated fighters: the CC0 "RobotExpressive" model by Tomás Laulhé
+(Quaternius), taken from the three.js examples (`public/models/fighters/robot.glb`). They walk, punch and die.

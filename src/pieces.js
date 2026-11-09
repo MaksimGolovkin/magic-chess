@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 const PI = Math.PI;
 
@@ -366,6 +367,7 @@ export async function loadModels() {
  * and model is the inner node that can be spun or tilted.
  */
 export function buildPiece(color, type) {
+  if (pieceStyle === 'fighters' && fighter) return buildFighter(color, type);
   const group = new THREE.Group();
   const model = new THREE.Group();
   group.add(model);
@@ -376,4 +378,98 @@ export function buildPiece(color, type) {
   else (color === 'w' ? LIGHT : DARK)[type](model, mats);
   const box = new THREE.Box3().setFromObject(group);
   return { group, model, height: box.max.y };
+}
+
+// ---------- animated fighters (test of fight animations) ----------
+// A free CC0 animated robot by Tomas Laulhe (Quaternius), from the three.js examples.
+// Every piece type uses the same robot at a different size, with a chess glyph above it.
+let pieceStyle = 'statues';
+export const setPieceStyle = (style) => { pieceStyle = style; };
+export const getPieceStyle = () => pieceStyle;
+
+const FIGHTER_HEIGHT = { p: 0.72, n: 0.8, b: 0.86, r: 0.9, q: 0.96, k: 1.04 };
+const FIGHTER_TINT = {
+  w: { Main: 0xe6dfd2, Grey: 0x8fc3e0, Black: 0x2a2a2a },
+  b: { Main: 0x3b3431, Grey: 0xc0461c, Black: 0x111111 },
+};
+let fighter = null;
+
+export async function loadFighters() {
+  if (fighter) return true;
+  const loader = new GLTFLoader();
+  try {
+    const gltf = await loader.loadAsync(new URL('models/fighters/robot.glb', document.baseURI).href);
+    const mats = { w: {}, b: {} };
+    gltf.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      o.castShadow = true;
+      o.receiveShadow = true;
+      o.frustumCulled = false;
+      o.geometry.userData.shared = true;
+      const name = o.material.name;
+      for (const c of ['w', 'b']) {
+        if (mats[c][name]) continue;
+        const m = o.material.clone();
+        if (FIGHTER_TINT[c][name] !== undefined) m.color.setHex(FIGHTER_TINT[c][name]);
+        m.roughness = 0.55;
+        m.metalness = 0.1;
+        mats[c][name] = m;
+      }
+    });
+    const box = new THREE.Box3().setFromObject(gltf.scene);
+    fighter = { scene: gltf.scene, animations: gltf.animations, mats, height: box.max.y - box.min.y, minY: box.min.y };
+    return true;
+  } catch (e) {
+    console.warn('Could not load fighters', e);
+    return false;
+  }
+}
+
+const GLYPHS = { w: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' }, b: { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' } };
+const glyphCache = {};
+function glyphSprite(color, type) {
+  const key = color + type;
+  if (!glyphCache[key]) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    g.fillStyle = color === 'w' ? 'rgba(20,30,40,0.55)' : 'rgba(40,15,8,0.6)';
+    g.beginPath();
+    g.arc(64, 64, 58, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = color === 'w' ? '#cfeaff' : '#ffb08a';
+    g.font = '86px "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(GLYPHS.b[type], 64, 70);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    glyphCache[key] = new THREE.SpriteMaterial({ map: t, depthWrite: false, transparent: true });
+  }
+  const sp = new THREE.Sprite(glyphCache[key]);
+  sp.scale.setScalar(0.24);
+  return sp;
+}
+
+function buildFighter(color, type) {
+  const group = new THREE.Group();
+  const model = new THREE.Group();
+  group.add(model);
+  base(model, MATERIALS[color]);
+  const body = cloneSkinned(fighter.scene);
+  body.traverse((o) => { if (o.isMesh) o.material = fighter.mats[color][o.material.name] || o.material; });
+  const h = FIGHTER_HEIGHT[type];
+  const s = h / fighter.height;
+  body.scale.setScalar(s);
+  body.position.y = 0.22 - fighter.minY * s;
+  model.add(body);
+  const glyph = glyphSprite(color, type);
+  glyph.position.y = 0.22 + h + 0.16;
+  model.add(glyph);
+  const mixer = new THREE.AnimationMixer(body);
+  const actions = {};
+  for (const clip of fighter.animations) actions[clip.name] = mixer.clipAction(clip);
+  actions.Idle.play();
+  actions.Idle.time = Math.random() * actions.Idle.getClip().duration;
+  return { group, model, height: 0.22 + h, mixer, actions, current: 'Idle' };
 }
